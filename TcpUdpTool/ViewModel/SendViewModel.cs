@@ -8,15 +8,16 @@ using TcpUdpTool.Model.Parser;
 using TcpUdpTool.Model.Util;
 using TcpUdpTool.ViewModel.Item;
 using TcpUdpTool.ViewModel.Base;
+using TcpUdpTool.Model;
 
 namespace TcpUdpTool.ViewModel
 {
-    public class SendViewModel : ObservableObject
+    public class SendViewModel : ObservableObject, IDisposable
     {
-
         #region private members
 
         private IParser _parser;
+        private CyclicSender _cyclicSender;
 
         #endregion
 
@@ -163,14 +164,13 @@ namespace TcpUdpTool.ViewModel
             }
         }
 
-
         private string _message;
         public string Message
         {
             get { return _message; }
             set
             {
-                if(_message != value)
+                if (_message != value)
                 {
                     _message = value;
                     OnPropertyChanged(nameof(Message));
@@ -218,10 +218,42 @@ namespace TcpUdpTool.ViewModel
             get { return _fileSelected; }
             set
             {
-                if(_fileSelected != value)
+                if (_fileSelected != value)
                 {
                     _fileSelected = value;
                     OnPropertyChanged(nameof(FileSelected));
+                }
+            }
+        }
+
+        private bool _cyclicSendingEnabled;
+        public bool CyclicSendingEnabled
+        {
+            get { return _cyclicSendingEnabled; }
+            set
+            {
+                if (_cyclicSendingEnabled != value)
+                {
+                    _cyclicSendingEnabled = value;
+                    OnPropertyChanged(nameof(CyclicSendingEnabled));
+                }
+            }
+        }
+
+        private int _cyclicInterval;
+        public int CyclicInterval
+        {
+            get { return _cyclicInterval; }
+            set
+            {
+                if (_cyclicInterval != value)
+                {
+                    _cyclicInterval = value;
+                    if (_cyclicInterval < 1)
+                    {
+                        _cyclicInterval = 1; // Ensure minimum 1ms interval
+                    }
+                    OnPropertyChanged(nameof(CyclicInterval));
                 }
             }
         }
@@ -251,6 +283,11 @@ namespace TcpUdpTool.ViewModel
             get { return new DelegateCommand(Send); }
         }
 
+        public ICommand StartStopCyclicCommand
+        {
+            get { return new DelegateCommand(StartStopCyclicSending); }
+        }
+
         #endregion
 
         #region constructors
@@ -260,6 +297,8 @@ namespace TcpUdpTool.ViewModel
             PlainTextSelected = true;
             Message = "";
             _parser = new PlainTextParser();
+            _cyclicSender = new CyclicSender();
+            CyclicInterval = 1000; // Default to 1 second
         }
 
         #endregion
@@ -272,7 +311,7 @@ namespace TcpUdpTool.ViewModel
             {
                 _parser = new PlainTextParser();
             }
-            else if(HexSelected)
+            else if (HexSelected)
             {
                 _parser = new HexParser();
             }
@@ -281,8 +320,8 @@ namespace TcpUdpTool.ViewModel
         private void Browse()
         {
             var dialog = new OpenFileDialog();
-                
-            if(dialog.ShowDialog().GetValueOrDefault())
+
+            if (dialog.ShowDialog().GetValueOrDefault())
             {
                 Message = dialog.FileName;
             }
@@ -290,19 +329,19 @@ namespace TcpUdpTool.ViewModel
 
         private void Send()
         {
-            if(FileSelected)
+            if (FileSelected)
             {
                 var filePath = Message;
 
-                if(!File.Exists(filePath))
+                if (!File.Exists(filePath))
                 {
                     DialogUtils.ShowErrorDialog("The file does not exist.");
                     return;
                 }
 
-                if(new FileInfo(filePath).Length > 4096)
+                if (new FileInfo(filePath).Length > 4096)
                 {
-                    DialogUtils.ShowErrorDialog("The file is to large to send, maximum size is 16 KB.");
+                    DialogUtils.ShowErrorDialog("The file is too large to send, maximum size is 16 KB.");
                     return;
                 }
 
@@ -311,9 +350,12 @@ namespace TcpUdpTool.ViewModel
                     byte[] file = File.ReadAllBytes(filePath);
                     SendData?.Invoke(file);
                 }
-                catch(Exception ex)
+                catch (Exception ex)
                 {
-                    DialogUtils.ShowErrorDialog("Error while reading file. " + ex.Message);
+                    if (!_cyclicSender.IsRunning)
+                    {
+                        DialogUtils.ShowErrorDialog("Error while reading file. " + ex.Message);
+                    }
                     return;
                 }
             }
@@ -327,13 +369,55 @@ namespace TcpUdpTool.ViewModel
                 }
                 catch (FormatException ex)
                 {
-                    DialogUtils.ShowErrorDialog(ex.Message);
+                    if (!_cyclicSender.IsRunning)
+                    {
+                        DialogUtils.ShowErrorDialog(ex.Message);
+                    }
                     return;
                 }
             }
         }
 
+        private void StartStopCyclicSending()
+        {
+            if (_cyclicSender.IsRunning)
+            {
+                _cyclicSender.Stop();
+                CyclicSendingEnabled = false;
+            }
+            else
+            {
+                // Skip validation errors for cyclic sending
+                bool hasErrors = false;
+
+                // Check if this is UDP port validation error
+                if (HasError(nameof(Port)) && Port.GetValueOrDefault() == 0)
+                {
+                    // Temporarily ignore this error for UDP which allows port 0
+                    hasErrors = false;
+                }
+                else if (HasError(nameof(Port)) || HasError(nameof(IpAddress)) ||
+                         HasError(nameof(MulticastGroup)) || HasError(nameof(MulticastTtl)))
+                {
+                    hasErrors = true;
+                }
+
+                if (hasErrors)
+                {
+                    DialogUtils.ShowErrorDialog("Please fix validation errors before starting cyclic sending.");
+                    return;
+                }
+
+                CyclicSendingEnabled = true;
+                _cyclicSender.Start(Send, CyclicInterval);
+            }
+        }
+
         #endregion
 
+        public void Dispose()
+        {
+            _cyclicSender?.Dispose();
+        }
     }
 }

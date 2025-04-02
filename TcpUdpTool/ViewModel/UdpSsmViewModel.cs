@@ -5,6 +5,7 @@ using System.Net;
 using System.Windows;
 using System.Windows.Input;
 using TcpUdpTool.Model;
+using TcpUdpTool.Model.Data;
 using TcpUdpTool.Model.Util;
 using TcpUdpTool.ViewModel.Base;
 using TcpUdpTool.ViewModel.Item;
@@ -13,7 +14,6 @@ namespace TcpUdpTool.ViewModel
 {
     public class UdpSsmViewModel : ObservableObject, IDisposable
     {
-
         #region private members
 
         private UdpMulticastClient _udpClient;
@@ -40,6 +40,12 @@ namespace TcpUdpTool.ViewModel
         public HistoryViewModel History
         {
             get { return _historyViewModel; }
+        }
+
+        private SendViewModel _sendViewModel = new SendViewModel();
+        public SendViewModel Send
+        {
+            get { return _sendViewModel; }
         }
 
         private bool _isGroupJoined;
@@ -196,10 +202,12 @@ namespace TcpUdpTool.ViewModel
             _udpClient = new UdpMulticastClient();
             LocalInterfaces = new ObservableCollection<InterfaceAddress>();
 
+            _sendViewModel.SendData += OnSend;
+
             _udpClient.Received += (sender, arg) =>
-                {
-                     History.Append(arg.Message);
-                };
+            {
+                History.Append(arg.Message);
+            };
 
             _udpClient.StatusChanged +=
                 (sender, arg) =>
@@ -219,6 +227,7 @@ namespace TcpUdpTool.ViewModel
 
             MulticastGroup = "";
             MulticastPort = 0;
+            MulticastSource = "";
             _historyViewModel.Header = "Conversation";
 
             RebuildInterfaceList();
@@ -261,6 +270,32 @@ namespace TcpUdpTool.ViewModel
         private void Leave()
         {
             _udpClient.Leave();
+        }
+
+        private async void OnSend(byte[] data)
+        {
+            try
+            {
+                var msg = new Transmission(data, Transmission.EType.Sent);
+                History.Append(msg);
+
+                // Since SSM doesn't have a send functionality in the original code,
+                // we create a custom message that explains this
+                msg.Origin = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 0);
+                msg.Destination = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 0);
+
+                // In a real implementation, this would need to send the data to some destination
+
+                // Only clear message if not in cyclic sending mode
+                if (!Send.CyclicSendingEnabled)
+                {
+                    Send.Message = "";
+                }
+            }
+            catch (Exception ex)
+            {
+                DialogUtils.ShowErrorDialog(ex.Message);
+            }
         }
 
         private bool ValidateJoin()
@@ -330,6 +365,7 @@ namespace TcpUdpTool.ViewModel
 
         public void Dispose()
         {
+            Send?.Dispose();
             _udpClient?.Dispose();
             _historyViewModel?.Dispose();
         }

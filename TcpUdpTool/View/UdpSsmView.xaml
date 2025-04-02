@@ -20,15 +20,6 @@
                 <dat:PropertyGroupDescription PropertyName="GroupName" />
             </CollectionViewSource.GroupDescriptions>
         </CollectionViewSource>
-           
-        <CollectionViewSource x:Key="SortedSendInterfaces" Source="{Binding Send.Interfaces}">
-            <CollectionViewSource.SortDescriptions>
-                <scm:SortDescription PropertyName="" Direction="Ascending" />
-            </CollectionViewSource.SortDescriptions>
-            <CollectionViewSource.GroupDescriptions>
-                <dat:PropertyGroupDescription PropertyName="GroupName" />
-            </CollectionViewSource.GroupDescriptions>
-        </CollectionViewSource>
     </UserControl.Resources>
 
     <Grid>
@@ -160,5 +151,74 @@
             Margin="10 0 10 10"
             DataContext="{Binding History}"/>
 
+        <GroupBox 
+            Header="Send"
+            Grid.Column="0"
+            Grid.Row="2"
+            Margin="10 0 10 10"
+            Padding="0 0 0 10">
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition />
+                    <RowDefinition />
+                </Grid.RowDefinitions>
+
+                <Label 
+                    Grid.Column="0"
+                    Grid.Row="0"
+                    Content="Cyclic:"
+                    Padding="0"
+                    Height="21"
+                    VerticalAlignment="Center"
+                    Margin="10 10 10 0"/>
+
+                <Grid Grid.Column="1"
+                      Grid.Row="0"
+                      Grid.ColumnSpan="2"
+                      Margin="0 10 0 0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox Grid.Column="0"
+                             Width="60"
+                             Height="21"
+                             VerticalAlignment="Center"
+                             VerticalContentAlignment="Center"
+                             Text="{Binding Send.CyclicInterval, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <Label Grid.Column="1"
+                           Content="ms"
+                           Padding="5 0"
+                           VerticalAlignment="Center"/>
+
+                    <Button Grid.Column="2"
+                            Width="80"
+                            Height="21"
+                            Margin="10 0 0 0"
+                            Command="{Binding Send.StartStopCyclicCommand}">
+                        <Button.Style>
+                            <Style TargetType="{x:Type Button}">
+                                <Setter Property="Content" Value="Start" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Send.CyclicSendingEnabled}" Value="True">
+                                        <Setter Property="Content" Value="Stop" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
+            </Grid>
+        </GroupBox>
     </Grid>
 </UserControl>

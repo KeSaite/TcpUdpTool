@@ -91,6 +91,7 @@
     <Compile Include="Model\EventArg\ReceivedEventArgs.cs" />
     <Compile Include="Model\Util\SettingsUtils.cs" />
     <Compile Include="Model\Util\StringFormatUtils.cs" />
+    <Compile Include="ViewModel\CycleSender.cs" />
     <Compile Include="ViewModel\Extension\ListViewExtension.cs" />
     <Compile Include="ViewModel\Extension\WindowExtension.cs" />
     <Compile Include="ViewModel\Helper\DispatchHelper.cs" />
@@ -227,9 +228,11 @@
       <Install>false</Install>
     </BootstrapperPackage>
   </ItemGroup>
-  <ItemGroup />
   <ItemGroup>
     <Resource Include="Resources\icon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\sponsor_qr.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

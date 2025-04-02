@@ -247,16 +247,22 @@ namespace TcpUdpTool.ViewModel
                 if (res != null)
                 {
                     foreach (var sendResult in res)
-					{
+                    {
                         Transmission entry = new Transmission(data, Transmission.EType.Sent);
                         msg.Origin = sendResult.From;
                         msg.Destination = sendResult.To;
-                        Send.Message = "";
+
+                        // Only clear message if not in cyclic sending mode
+                        if (!Send.CyclicSendingEnabled)
+                        {
+                            Send.Message = "";
+                        }
+
                         History.Append(msg);
                     }
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 DialogUtils.ShowErrorDialog(ex.Message);
             }
@@ -317,6 +323,7 @@ namespace TcpUdpTool.ViewModel
 
         public void Dispose()
         {
+            Send?.Dispose();
             _tcpServer?.Dispose();
             _historyViewModel?.Dispose();
         }

@@ -214,7 +214,12 @@ namespace TcpUdpTool.ViewModel
                 {
                     msg.Origin = res.From;
                     msg.Destination = res.To;
-                    Send.Message = "";
+
+                    // Only clear message if not in cyclic sending mode
+                    if (!Send.CyclicSendingEnabled)
+                    {
+                        Send.Message = "";
+                    }
                 }
             }
             catch (Exception ex)
@@ -290,6 +295,7 @@ namespace TcpUdpTool.ViewModel
 
         public void Dispose()
         {
+            Send?.Dispose();
             _udpClientServer?.Dispose();
             _historyViewModel?.Dispose();
         }

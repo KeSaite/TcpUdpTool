@@ -13,7 +13,7 @@ namespace TcpUdpTool.ViewModel
         #region private Members
 
         private TcpClient _tcpClient;
-     
+
         #endregion
 
         #region public Properties
@@ -58,11 +58,11 @@ namespace TcpUdpTool.ViewModel
             get { return _ipAddress; }
             set
             {
-                if(_ipAddress != value)
+                if (_ipAddress != value)
                 {
                     _ipAddress = value;
-                        
-                    if(String.IsNullOrWhiteSpace(_ipAddress))
+
+                    if (String.IsNullOrWhiteSpace(_ipAddress))
                     {
                         AddError(nameof(IpAddress), "IP address cannot be empty.");
                     }
@@ -70,7 +70,7 @@ namespace TcpUdpTool.ViewModel
                     {
                         RemoveError(nameof(IpAddress));
                     }
-                      
+
                     OnPropertyChanged(nameof(IpAddress));
                 }
             }
@@ -82,11 +82,11 @@ namespace TcpUdpTool.ViewModel
             get { return _port; }
             set
             {
-                if(_port != value)
+                if (_port != value)
                 {
                     _port = value;
 
-                    if(!NetworkUtils.IsValidPort(_port.HasValue ? _port.Value : -1, false))
+                    if (!NetworkUtils.IsValidPort(_port.HasValue ? _port.Value : -1, false))
                     {
                         AddError(nameof(Port), "Port must be between 1 and 65535.");
                     }
@@ -109,16 +109,16 @@ namespace TcpUdpTool.ViewModel
             get
             {
                 return new DelegateCommand(() =>
+                {
+                    if (IsConnected)
                     {
-                        if (IsConnected)
-                        {
-                            Disconnect();
-                        }                         
-                        else
-                        {
-                            Connect();
-                        }                          
-                    }                  
+                        Disconnect();
+                    }
+                    else
+                    {
+                        Connect();
+                    }
+                }
                 );
             }
         }
@@ -132,13 +132,13 @@ namespace TcpUdpTool.ViewModel
             _tcpClient = new TcpClient();
 
             _sendViewModel.SendData += OnSend;
-            _tcpClient.StatusChanged += 
-                (sender, arg) => 
+            _tcpClient.StatusChanged +=
+                (sender, arg) =>
                 {
                     IsConnected = arg.Status == TcpClientStatusEventArgs.EConnectStatus.Connected;
                     IsConnecting = arg.Status == TcpClientStatusEventArgs.EConnectStatus.Connecting;
 
-                    if(IsConnected)
+                    if (IsConnected)
                     {
                         History.Header = "Connected to: < " + arg.RemoteEndPoint.ToString() + " >";
                     }
@@ -146,13 +146,13 @@ namespace TcpUdpTool.ViewModel
                     {
                         History.Header = "Conversation";
                     }
-                  
+
                 };
 
-            _tcpClient.Received += 
+            _tcpClient.Received +=
                 (sender, arg) =>
                 {
-                    History.Append(arg.Message);                  
+                    History.Append(arg.Message);
                 };
 
 
@@ -174,10 +174,10 @@ namespace TcpUdpTool.ViewModel
             {
                 await _tcpClient.ConnectAsync(IpAddress, Port.Value);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 DialogUtils.ShowErrorDialog(ex.Message);
-            }        
+            }
         }
 
         private void Disconnect()
@@ -196,10 +196,15 @@ namespace TcpUdpTool.ViewModel
                 {
                     msg.Origin = res.From;
                     msg.Destination = res.To;
-                    Send.Message = "";
-                }        
+
+                    // Only clear message if not in cyclic sending mode
+                    if (!Send.CyclicSendingEnabled)
+                    {
+                        Send.Message = "";
+                    }
+                }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 DialogUtils.ShowErrorDialog(ex.Message);
             }
@@ -213,17 +218,18 @@ namespace TcpUdpTool.ViewModel
             else if (HasError(nameof(Port)))
                 error = GetError(nameof(Port));
 
-            if(error != null)
+            if (error != null)
             {
                 DialogUtils.ShowErrorDialog(error);
                 return false;
             }
-           
+
             return true;
         }
 
         public void Dispose()
         {
+            Send?.Dispose();
             _tcpClient?.Dispose();
             _historyViewModel?.Dispose();
         }
