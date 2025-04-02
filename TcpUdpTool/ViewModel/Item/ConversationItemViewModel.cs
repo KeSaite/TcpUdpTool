@@ -12,7 +12,7 @@ namespace TcpUdpTool.ViewModel.Item
 
         public string Timestamp
         {
-            get { return "[" + _message.Timestamp.ToLongTimeString() + "]"; }
+            get { return "[" + _message.Timestamp.ToString("HH:mm:ss.fff") + "]"; }
         }
 
         public bool TimestampVisible
