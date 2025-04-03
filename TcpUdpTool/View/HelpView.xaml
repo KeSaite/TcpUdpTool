@@ -21,7 +21,7 @@
                     <Run FontSize="26" FontWeight="Bold">TcpUdpTool</Run>
                 </Paragraph>
                 <Paragraph Margin="0 16 0 0">
-                    <Run FontWeight="Bold">Version:</Run> 1.1.2
+                    <Run FontWeight="Bold">Version:</Run> 1.1.3
                     <LineBreak />
                     <Run FontWeight="Bold">Author:</Run> Daniel Nilsson
                     <LineBreak />

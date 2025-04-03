@@ -92,12 +92,13 @@
                             Grid.Row="0"
                             Orientation="Horizontal">
                     <TextBox 
-                         Width="40"
-                         Height="20"
-                         VerticalContentAlignment="Center"
-                         HorizontalAlignment="Left"
-                         Validation.ErrorTemplate="{x:Null}"
-                         Text="{Binding HistoryEntries, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        Width="60"
+                        Height="20"
+                        VerticalContentAlignment="Center"
+                        HorizontalAlignment="Left"
+                        Validation.ErrorTemplate="{x:Null}"
+                        Text="{Binding HistoryEntries, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, 
+                               StringFormat='{}{0}', TargetNullValue='100', FallbackValue='100'}"/>
 
                     <Label Content="entries" />
                 </StackPanel>

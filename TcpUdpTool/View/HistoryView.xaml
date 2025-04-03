@@ -29,6 +29,8 @@
                 Grid.ColumnSpan="4"
                 Margin="0 0 0 4"
                 VirtualizingPanel.ScrollUnit="Pixel"
+                VirtualizingPanel.VirtualizationMode="Recycling"
+                VirtualizingPanel.IsVirtualizing="True"
                 ext:ListViewExtension.AutoScrollToEnd="{Binding Source={x:Static properties:Settings.Default}, Path=ScrollToEnd}">
 
                 <ListView.InputBindings>
@@ -75,6 +77,13 @@
                     <Style TargetType="{x:Type ListViewItem}" BasedOn="{StaticResource ConversationListItemStyle}">
                         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
                         <Setter Property="ContextMenu" Value="{StaticResource ItemContextMenu}" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="VerticalContentAlignment" Value="Center" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsVisible}" Value="False">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
                     </Style>
                 </ListView.ItemContainerStyle>
 
@@ -193,6 +202,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition />
                     </Grid.RowDefinitions>
 
@@ -252,6 +262,18 @@
                         Grid.Column="1"
                         Grid.Row="6"
                         Text="{Binding TotalSent}" />
+
+                    <TextBlock 
+                        Grid.Column="0" 
+                        Grid.Row="7"
+                        FontWeight="Bold"
+                        Margin="0 0 16 0"
+                        Text="Memory:" />
+
+                    <TextBlock
+                        Grid.Column="1"
+                        Grid.Row="7"
+                        Text="{Binding MemoryUsage}" />
 
                 </Grid>
             </Border>

@@ -58,5 +58,19 @@ namespace TcpUdpTool.ViewModel.Item
             OnPropertyChanged(nameof(SourceVisible));
         }
 
+        // Add this property to ConversationItemViewModel class
+        private bool _isVisible = true;
+        public bool IsVisible
+        {
+            get { return _isVisible; }
+            set
+            {
+                if (_isVisible != value)
+                {
+                    _isVisible = value;
+                    OnPropertyChanged(nameof(IsVisible));
+                }
+            }
+        }
     }
 }

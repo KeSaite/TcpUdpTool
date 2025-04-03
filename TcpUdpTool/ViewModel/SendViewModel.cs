@@ -298,7 +298,7 @@ namespace TcpUdpTool.ViewModel
             Message = "";
             _parser = new PlainTextParser();
             _cyclicSender = new CyclicSender();
-            CyclicInterval = 1000; // Default to 1 second
+            CyclicInterval = 1000;
         }
 
         #endregion
@@ -410,6 +410,30 @@ namespace TcpUdpTool.ViewModel
 
                 CyclicSendingEnabled = true;
                 _cyclicSender.Start(Send, CyclicInterval);
+            }
+        }
+
+        private int _historyEntries;
+        public int HistoryEntries
+        {
+            get { return _historyEntries; }
+            set
+            {
+                if (_historyEntries != value)
+                {
+                    _historyEntries = value;
+                    if (_historyEntries < 1)
+                    {
+                        _historyEntries = 1;  // Allow minimum of 1
+                    }
+                    else if (_historyEntries > 100000)
+                    {
+                        _historyEntries = 100000;
+                    }
+
+                    Properties.Settings.Default.HistoryEntries = _historyEntries;
+                    OnPropertyChanged(nameof(HistoryEntries));
+                }
             }
         }
 

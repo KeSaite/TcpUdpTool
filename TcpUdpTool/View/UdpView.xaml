@@ -280,7 +280,7 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBox Grid.Column="0"
-                             Width="60"
+                             Width="85"
                              Height="21"
                              VerticalAlignment="Center"
                              VerticalContentAlignment="Center"

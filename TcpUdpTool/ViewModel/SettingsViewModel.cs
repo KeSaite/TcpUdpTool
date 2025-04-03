@@ -2,6 +2,7 @@
 using System.Text;
 using TcpUdpTool.ViewModel.Base;
 using System.Linq;
+using System;
 
 namespace TcpUdpTool.ViewModel
 {
@@ -80,18 +81,27 @@ namespace TcpUdpTool.ViewModel
             get { return _historyEntries; }
             set
             {
-                if(_historyEntries != value)
+                try
                 {
-                    _historyEntries = value;
-                    if(_historyEntries < 1)
+                    if (_historyEntries != value)
                     {
-                        _historyEntries = 1;
-                    }
-                    else if(_historyEntries > 1000)
-                    {
-                        _historyEntries = 1000;
-                    }
+                        _historyEntries = value;
+                        if (_historyEntries < 1)
+                        {
+                            _historyEntries = 1;
+                        }
+                        else if (_historyEntries > 100000)
+                        {
+                            _historyEntries = 100000;
+                        }
 
+                        Properties.Settings.Default.HistoryEntries = _historyEntries;
+                        OnPropertyChanged(nameof(HistoryEntries));
+                    }
+                }
+                catch (FormatException)
+                {
+                    _historyEntries = 100;
                     Properties.Settings.Default.HistoryEntries = _historyEntries;
                     OnPropertyChanged(nameof(HistoryEntries));
                 }

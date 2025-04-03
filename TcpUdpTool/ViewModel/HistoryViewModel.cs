@@ -6,6 +6,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using System.Threading.Tasks;
 using TcpUdpTool.Model;
 using TcpUdpTool.Model.Data;
 using TcpUdpTool.Model.Formatter;
@@ -13,12 +14,12 @@ using TcpUdpTool.Model.Util;
 using TcpUdpTool.ViewModel.Helper;
 using TcpUdpTool.ViewModel.Item;
 using TcpUdpTool.ViewModel.Base;
+using System.Linq;
 
 namespace TcpUdpTool.ViewModel
 {
     public class HistoryViewModel : ObservableObject, IContentChangedHelper, IDisposable
     {
-
         #region private members
 
         private BlockingCollection<Transmission> _incomingQueue;
@@ -26,6 +27,8 @@ namespace TcpUdpTool.ViewModel
         private IFormatter _formatter;
         private DispatcherTimer _updateTimer;
         private long _lastPackageDiscarded;
+        private readonly object _updateLock = new object();
+        private DateTime _lastUpdateTime = DateTime.Now;
 
         #endregion
 
@@ -54,7 +57,7 @@ namespace TcpUdpTool.ViewModel
             get { return _totalReceived; }
             set
             {
-                if(_totalReceived != value)
+                if (_totalReceived != value)
                 {
                     _totalReceived = value;
                     OnPropertyChanged(nameof(TotalReceived));
@@ -138,7 +141,7 @@ namespace TcpUdpTool.ViewModel
             get { return _statisticsSelected; }
             set
             {
-                if(value != _statisticsSelected)
+                if (value != _statisticsSelected)
                 {
                     _statisticsSelected = value;
                     OnPropertyChanged(nameof(StatisticsSelected));
@@ -152,10 +155,39 @@ namespace TcpUdpTool.ViewModel
             get { return _packageDiscardedWarning; }
             set
             {
-                if(_packageDiscardedWarning != value)
+                if (_packageDiscardedWarning != value)
                 {
                     _packageDiscardedWarning = value;
                     OnPropertyChanged(nameof(PackageDiscardedWarning));
+                }
+            }
+        }
+
+        private bool _isProcessingLargeData;
+        public bool IsProcessingLargeData
+        {
+            get { return _isProcessingLargeData; }
+            set
+            {
+                if (_isProcessingLargeData != value)
+                {
+                    _isProcessingLargeData = value;
+                    OnPropertyChanged(nameof(IsProcessingLargeData));
+                }
+            }
+        }
+
+        private string _searchText;
+        public string SearchText
+        {
+            get { return _searchText; }
+            set
+            {
+                if (_searchText != value)
+                {
+                    _searchText = value;
+                    OnPropertyChanged(nameof(SearchText));
+                    ApplySearch();
                 }
             }
         }
@@ -184,6 +216,11 @@ namespace TcpUdpTool.ViewModel
             get { return new DelegateCommand(Save); }
         }
 
+        public ICommand SearchCommand
+        {
+            get { return new DelegateCommand(ApplySearch); }
+        }
+
         #endregion
 
         #region public events
@@ -193,6 +230,8 @@ namespace TcpUdpTool.ViewModel
         #endregion
 
         #region constructors
+
+        private int _userHistoryCount;
 
         public HistoryViewModel()
         {
@@ -205,32 +244,34 @@ namespace TcpUdpTool.ViewModel
             _updateTimer.Interval = new TimeSpan(0, 0, 0, 0, 50);
             _updateTimer.Tick += (sender, arg) => OnUpdateUI();
 
+            _userHistoryCount = Properties.Settings.Default.HistoryEntries;
+
             PlainTextSelected = true;
 
             _rateMonitor.Start();
             _updateTimer.Start();
 
-            
+
             Properties.Settings.Default.PropertyChanged +=
                 (sender, e) =>
                 {
                     if (e.PropertyName == nameof(Properties.Settings.Default.HistoryEntries))
                     {
-                        // just switch out the queue, don't care about potentially lost items.
-                        _incomingQueue = new BlockingCollection<Transmission>(Properties.Settings.Default.HistoryEntries);
+                        _userHistoryCount = Properties.Settings.Default.HistoryEntries;
+
+                        int queueCapacity = Math.Max(100, _userHistoryCount);
+                        _incomingQueue = new BlockingCollection<Transmission>(queueCapacity);
                     }
-                    else if(e.PropertyName == nameof(Properties.Settings.Default.Encoding))
+                    else if (e.PropertyName == nameof(Properties.Settings.Default.Encoding))
                     {
                         ViewChanged();
                     }
                     else if (e.PropertyName == nameof(Properties.Settings.Default.HistoryInfoTimestamp) ||
                              e.PropertyName == nameof(Properties.Settings.Default.HistoryInfoIpAdress))
                     {
-                        // force update.
                         ViewChanged();
                     }
                 };
-           
         }
 
         #endregion
@@ -239,7 +280,7 @@ namespace TcpUdpTool.ViewModel
 
         public void Append(Transmission msg)
         {
-            if(msg.IsReceived)
+            if (msg.IsReceived)
             {
                 _rateMonitor.NoteReceived(msg);
             }
@@ -248,9 +289,14 @@ namespace TcpUdpTool.ViewModel
                 _rateMonitor.NoteSent(msg);
             }
 
-            if(!_incomingQueue.TryAdd(msg))
+            if (!_incomingQueue.TryAdd(msg))
             {
                 _lastPackageDiscarded = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+            }
+
+            if (_incomingQueue.Count > _incomingQueue.BoundedCapacity * 0.8)
+            {
+                TriggerPrioritizedUpdate();
             }
         }
 
@@ -258,7 +304,7 @@ namespace TcpUdpTool.ViewModel
         {
             Conversation.Clear();
 
-            if(StatisticsSelected)
+            if (StatisticsSelected)
             {
                 _rateMonitor.Reset();
                 OnUpdateUI();
@@ -266,7 +312,7 @@ namespace TcpUdpTool.ViewModel
         }
 
         private void ViewChanged()
-        {           
+        {
             if (PlainTextSelected)
             {
                 _formatter = new PlainTextFormatter(SettingsUtils.GetEncoding());
@@ -283,6 +329,73 @@ namespace TcpUdpTool.ViewModel
 
         #region private functions
 
+        private void TriggerPrioritizedUpdate()
+        {
+            lock (_updateLock)
+            {
+                TimeSpan elapsed = DateTime.Now - _lastUpdateTime;
+                if (elapsed.TotalMilliseconds > 250)
+                {
+                    DispatchHelper.Invoke(() =>
+                    {
+                        OnUpdateUI();
+                        _lastUpdateTime = DateTime.Now;
+                    });
+                }
+            }
+        }
+
+        private void ApplySearch()
+        {
+            if (string.IsNullOrEmpty(SearchText))
+            {
+                foreach (var item in _conversation)
+                {
+                    item.IsVisible = true;
+                }
+            }
+            else
+            {
+                string searchUpper = SearchText.ToUpperInvariant();
+
+                foreach (var item in _conversation)
+                {
+                    string contentUpper = item.Content.ToUpperInvariant();
+                    item.IsVisible = contentUpper.Contains(searchUpper);
+                }
+            }
+        }
+
+        private void UpdateStatistics()
+        {
+            TotalReceived = StringFormatUtils.GetSizeAsString(_rateMonitor.TotalReceivedBytes);
+            RateReceive = StringFormatUtils.GetRateAsString(_rateMonitor.CurrentReceiveRate) +
+                " (" + StringFormatUtils.GetSizeAsString(_rateMonitor.CurrentReceiveRate / 8) + "/s)";
+            TotalSent = StringFormatUtils.GetSizeAsString(_rateMonitor.TotalSentBytes);
+            RateSend = StringFormatUtils.GetRateAsString(_rateMonitor.CurrentSendRate) +
+                " (" + StringFormatUtils.GetSizeAsString(_rateMonitor.CurrentSendRate / 8) + "/s)";
+        }
+
+        private void AdjustUpdateFrequency()
+        {
+            if (_rateMonitor.CurrentReceiveRate > 500000)
+            {
+                _updateTimer.Interval = new TimeSpan(0, 0, 0, 0, 200);
+            }
+            else if (_rateMonitor.CurrentReceiveRate > 100000)
+            {
+                _updateTimer.Interval = new TimeSpan(0, 0, 0, 0, 100);
+            }
+            else if (_incomingQueue.Count > 0)
+            {
+                _updateTimer.Interval = new TimeSpan(0, 0, 0, 0, 50);
+            }
+            else
+            {
+                _updateTimer.Interval = new TimeSpan(0, 0, 0, 0, 200);
+            }
+        }
+
         private void Copy()
         {
             Clipboard.SetText(GetSelectedItemsAsString());
@@ -294,14 +407,14 @@ namespace TcpUdpTool.ViewModel
 
             var dialog = new SaveFileDialog();
             dialog.Filter = "Text file (*.txt)|*.txt";
-            
-            if(dialog.ShowDialog().GetValueOrDefault())
+
+            if (dialog.ShowDialog().GetValueOrDefault())
             {
                 try
                 {
                     File.WriteAllText(dialog.FileName, data);
                 }
-                catch(Exception ex)
+                catch (Exception ex)
                 {
                     DialogUtils.ShowErrorDialog("Failed to save file. " + ex.Message);
                 }
@@ -311,16 +424,16 @@ namespace TcpUdpTool.ViewModel
         private string GetSelectedItemsAsString()
         {
             var sb = new StringBuilder();
-            foreach(var item in _conversation)
+            foreach (var item in _conversation)
             {
-                if(item.IsSelected)
+                if (item.IsSelected)
                 {
-                    if(item.TimestampVisible)
+                    if (item.TimestampVisible)
                     {
                         sb.Append(item.Timestamp);
                     }
 
-                    if(item.SourceVisible)
+                    if (item.SourceVisible)
                     {
                         sb.Append(item.Source);
                     }
@@ -336,7 +449,7 @@ namespace TcpUdpTool.ViewModel
 
         private void ApplyFormatter(IFormatter formatter)
         {
-            foreach(var item in _conversation)
+            foreach (var item in _conversation)
             {
                 item.SetFormatter(formatter);
             }
@@ -344,36 +457,65 @@ namespace TcpUdpTool.ViewModel
 
         private void OnUpdateUI()
         {
-            if (StatisticsSelected)
+            lock (_updateLock)
             {
-                PackageDiscardedWarning = false;
+                IsProcessingLargeData = _incomingQueue.Count > 50;
 
-                TotalReceived = StringFormatUtils.GetSizeAsString(_rateMonitor.TotalReceivedBytes);
-                RateReceive = StringFormatUtils.GetRateAsString(_rateMonitor.CurrentReceiveRate) + " (" + StringFormatUtils.GetSizeAsString(_rateMonitor.CurrentReceiveRate / 8) + "/s)";
-                TotalSent = StringFormatUtils.GetSizeAsString(_rateMonitor.TotalSentBytes);
-                RateSend = StringFormatUtils.GetRateAsString(_rateMonitor.CurrentSendRate) + " (" + StringFormatUtils.GetSizeAsString(_rateMonitor.CurrentSendRate / 8) + "/s)"; ;
-
-                // dont update conversation view if more than 100kbps 
-                // is received and view not selected.
-                if (_rateMonitor.CurrentReceiveRate > 100000)
+                if (StatisticsSelected)
                 {
-                    return;
+                    PackageDiscardedWarning = false;
+                    UpdateStatistics();
+
+                    if (_rateMonitor.CurrentReceiveRate > 100000)
+                    {
+                        return;
+                    }
                 }
-            }
-            else
-            {
-                PackageDiscardedWarning = ((DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond) - _lastPackageDiscarded) < 10000;
+                else
+                {
+                    PackageDiscardedWarning = ((DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond) - _lastPackageDiscarded) < 10000;
+                }
+
+                UpdateMemoryUsage();
+
+                int batchSize = DetermineBatchSize();
+                if (batchSize > 0)
+                {
+                    UpdateConversationView(batchSize);
+                }
+
+                _lastUpdateTime = DateTime.Now;
+
+                AdjustUpdateFrequency();
             }
 
+        }
+
+        private int DetermineBatchSize()
+        {
+            int queueSize = _incomingQueue.Count;
+
+            if (queueSize < 10) return queueSize;
+
+            if (queueSize < 100) return queueSize / 2;
+
+            return 50;
+        }
+
+        private void UpdateConversationView(int batchSize)
+        {
             _conversation.BeginBatch();
 
             Transmission msg;
-            while(_incomingQueue.TryTake(out msg))
+            int count = 0;
+
+            while (count < batchSize && _incomingQueue.TryTake(out msg))
             {
                 _conversation.Add(new ConversationItemViewModel(msg, _formatter));
+                count++;
             }
 
-            while(_conversation.Count > _incomingQueue.BoundedCapacity)
+            while (_conversation.Count > _userHistoryCount)
             {
                 _conversation.RemoveAt(0);
             }
@@ -381,13 +523,34 @@ namespace TcpUdpTool.ViewModel
             _conversation.EndBatch();
         }
 
+        private string _memoryUsage;
+        public string MemoryUsage
+        {
+            get { return _memoryUsage; }
+            set
+            {
+                if (_memoryUsage != value)
+                {
+                    _memoryUsage = value;
+                    OnPropertyChanged(nameof(MemoryUsage));
+                }
+            }
+        }
+        private void UpdateMemoryUsage()
+        {
+            if (StatisticsSelected)
+            {
+                long memBytes = GC.GetTotalMemory(false);
+                MemoryUsage = StringFormatUtils.GetSizeAsString((ulong)memBytes);
+            }
+        }
         public void Dispose()
         {
             _incomingQueue?.Dispose();
             _rateMonitor?.Dispose();
+            _updateTimer?.Stop();
         }
 
         #endregion
-
     }
 }
