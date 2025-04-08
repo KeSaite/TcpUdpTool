@@ -7,8 +7,8 @@
         xmlns:ext="clr-namespace:TcpUdpTool.ViewModel.Extension"
         xmlns:view="clr-namespace:TcpUdpTool.View"
         mc:Ignorable="d"
-        Title="TcpUdpTool" Height="600" Width="480"
-        MinHeight="500" MinWidth="470"
+        Title="TcpUdpTool" Height="606" Width="480"
+        MinHeight="506" MinWidth="470"
         Background="#FFE8E8E8"
         ext:WindowExtension.CloseCommand="{Binding CloseCommand}">
 
